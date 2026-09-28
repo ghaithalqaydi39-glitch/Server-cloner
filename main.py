@@ -1,6 +1,6 @@
 # Language: Python 3.10+
 # Runtime: Render Free Tier Web Service
-# Target: Self-Bot with HTTP Keep-Alive for Free Tier
+# Target: Self-Bot Server Cloner (Target-Existing Mode)
 
 import asyncio
 import os
@@ -11,7 +11,6 @@ from aiohttp import web
 TOKEN = os.getenv("DISCORD_TOKEN")
 PORT = int(os.getenv("PORT", 10000))
 
-# Initialize bot without bot=False keyword argument here
 bot = commands.Bot(command_prefix=".", self_bot=True)
 
 async def handle_ping(request):
@@ -29,31 +28,31 @@ async def start_web_server():
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
-    print("Free tier cloner active. Use .clone [source_guild_id] anywhere.")
+    print("Cloner ready. Use .clone [source_id] [target_id]")
 
 @bot.command(name="clone")
-async def clone_new_server(ctx, source_guild_id: int):
+async def clone_server(ctx, source_guild_id: int, target_guild_id: int):
     source_guild = bot.get_guild(source_guild_id)
+    target_guild = bot.get_guild(target_guild_id)
+
     if not source_guild:
         await ctx.send("Source guild not found or your account is not a member of it.")
         return
-
-    await ctx.send(f"Creating a new server cloned from [{source_guild.name}]... Please wait.")
-
-    try:
-        target_guild = await bot.create_guild(name=f"Copy of {source_guild.name}")
-        await asyncio.sleep(3.0)
-    except Exception as e:
-        await ctx.send(f"Failed to create new server: {e}")
+    if not target_guild:
+        await ctx.send("Target guild not found. Make sure you are in the destination server and have admin rights.")
         return
 
+    await ctx.send(f"Cloning [{source_guild.name}] into [{target_guild.name}]... Please wait.")
+
+    # 1. Wipe default channels in the target server
     for channel in target_guild.channels:
         try:
             await channel.delete()
             await asyncio.sleep(1.2)
         except Exception as e:
-            print(f"Failed to delete default channel {channel.name}: {e}")
+            print(f"Failed to delete channel {channel.name}: {e}")
 
+    # 2. Recreate Roles (sorted by position, skipping @everyone and managed roles)
     role_mapping = {}
     sorted_roles = sorted(source_guild.roles, key=lambda r: r.position)
     
@@ -73,6 +72,7 @@ async def clone_new_server(ctx, source_guild_id: int):
         except Exception as e:
             print(f"Failed to create role {role.name}: {e}")
 
+    # 3. Recreate Categories and Channels
     categories = sorted([c for c in source_guild.categories], key=lambda c: c.position)
     
     for category in categories:
@@ -110,6 +110,7 @@ async def clone_new_server(ctx, source_guild_id: int):
         except Exception as e:
             print(f"Failed to clone category {category.name}: {e}")
 
+    # 4. Recreate Uncategorized Channels
     for channel in source_guild.channels:
         if channel.category is None:
             try:
@@ -130,7 +131,7 @@ async def clone_new_server(ctx, source_guild_id: int):
             except Exception as e:
                 print(f"Failed to clone uncategorized channel {channel.name}: {e}")
 
-    await ctx.send(f"Successfully cloned [{source_guild.name}] into a brand new server: **{target_guild.name}**")
+    await ctx.send(f"Successfully cloned [{source_guild.name}] into [{target_guild.name}]!")
 
 async def main():
     if not TOKEN:
@@ -138,7 +139,6 @@ async def main():
         return
     
     await start_web_server()
-    # Call bot.start with just the token string (self_bot=True handles the rest)
     await bot.start(TOKEN)
 
 if __name__ == "__main__":
