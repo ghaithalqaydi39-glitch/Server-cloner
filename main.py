@@ -2,18 +2,18 @@
 # Runtime: Render Free Tier Web Service
 # Target: Self-Bot with HTTP Keep-Alive for Free Tier
 
-asyncio = __import__('asyncio')
-os = __import__('os')
-discord = __import__('discord')
+import asyncio
+import os
+import discord
 from discord.ext import commands
 from aiohttp import web
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 PORT = int(os.getenv("PORT", 10000))
 
+# Initialize bot without bot=False keyword argument here
 bot = commands.Bot(command_prefix=".", self_bot=True)
 
-# 1. Simple HTTP server to satisfy Render's free tier port binding requirement
 async def handle_ping(request):
     return web.Response(text="Bot is online and running.")
 
@@ -137,9 +137,9 @@ async def main():
         print("Error: DISCORD_TOKEN environment variable not set.")
         return
     
-    # Run the web server and the bot concurrently
     await start_web_server()
-    await bot.start(TOKEN, bot=False)
+    # Call bot.start with just the token string (self_bot=True handles the rest)
+    await bot.start(TOKEN)
 
 if __name__ == "__main__":
     asyncio.run(main())
