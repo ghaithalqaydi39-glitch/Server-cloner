@@ -1,6 +1,6 @@
 # Language: Python 3.10+
 # Runtime: Render Free Tier Web Service
-# Target: Self-Bot Server Cloner (Target-Existing Mode)
+# Target: Self-Bot Full Server Cloner (Target-Existing Mode with Full Wipe)
 
 import asyncio
 import os
@@ -36,15 +36,15 @@ async def clone_server(ctx, source_guild_id: int, target_guild_id: int):
     target_guild = bot.get_guild(target_guild_id)
 
     if not source_guild:
-        await ctx.send("Source guild not found or your account is not a member of it.")
+        await ctx.send("Source guild not found.")
         return
     if not target_guild:
-        await ctx.send("Target guild not found. Make sure you are in the destination server and have admin rights.")
+        await ctx.send("Target guild not found. Make sure you are in it.")
         return
 
-    await ctx.send(f"Cloning [{source_guild.name}] into [{target_guild.name}]... Please wait.")
+    await ctx.send(f"Wiping and cloning [{source_guild.name}] into [{target_guild.name}]...")
 
-    # 1. Wipe default channels in the target server
+    # 1. Wipe all existing channels in the target server
     for channel in target_guild.channels:
         try:
             await channel.delete()
@@ -52,7 +52,17 @@ async def clone_server(ctx, source_guild_id: int, target_guild_id: int):
         except Exception as e:
             print(f"Failed to delete channel {channel.name}: {e}")
 
-    # 2. Recreate Roles (sorted by position, skipping @everyone and managed roles)
+    # 2. Wipe all existing custom roles in the target server (bottom-up to avoid hierarchy blocks)
+    sorted_target_roles = sorted(target_guild.roles, key=lambda r: r.position, reverse=True)
+    for role in sorted_target_roles:
+        if not role.is_default() and not role.managed and role < target_guild.me.top_role:
+            try:
+                await role.delete()
+                await asyncio.sleep(1.2)
+            except Exception as e:
+                print(f"Failed to delete role {role.name}: {e}")
+
+    # 3. Recreate Roles from source (bottom-up by position, skipping @everyone and managed roles)
     role_mapping = {}
     sorted_roles = sorted(source_guild.roles, key=lambda r: r.position)
     
@@ -72,7 +82,7 @@ async def clone_server(ctx, source_guild_id: int, target_guild_id: int):
         except Exception as e:
             print(f"Failed to create role {role.name}: {e}")
 
-    # 3. Recreate Categories and Channels
+    # 4. Recreate Categories and Channels
     categories = sorted([c for c in source_guild.categories], key=lambda c: c.position)
     
     for category in categories:
@@ -110,7 +120,7 @@ async def clone_server(ctx, source_guild_id: int, target_guild_id: int):
         except Exception as e:
             print(f"Failed to clone category {category.name}: {e}")
 
-    # 4. Recreate Uncategorized Channels
+    # 5. Recreate Uncategorized Channels
     for channel in source_guild.channels:
         if channel.category is None:
             try:
@@ -131,7 +141,7 @@ async def clone_server(ctx, source_guild_id: int, target_guild_id: int):
             except Exception as e:
                 print(f"Failed to clone uncategorized channel {channel.name}: {e}")
 
-    await ctx.send(f"Successfully cloned [{source_guild.name}] into [{target_guild.name}]!")
+    await ctx.send(f"Clone complete. [{target_guild.name}] is now an exact replica of [{source_guild.name}].")
 
 async def main():
     if not TOKEN:
