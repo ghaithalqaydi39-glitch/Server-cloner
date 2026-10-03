@@ -1,6 +1,6 @@
 # Language: Python 3.10+
 # Runtime: Render Free Tier Web Service
-# Target: Self-Bot Full Server Cloner (Target-Existing Mode with Full Wipe)
+# Target: Self-Bot Full Server Cloner (With Intents & Debug Logging)
 
 import asyncio
 import os
@@ -11,7 +11,11 @@ from aiohttp import web
 TOKEN = os.getenv("DISCORD_TOKEN")
 PORT = int(os.getenv("PORT", 10000))
 
-bot = commands.Bot(command_prefix=".", self_bot=True)
+intents = discord.Intents.default()
+intents.message_content = True
+intents.guilds = True
+
+bot = commands.Bot(command_prefix=".", self_bot=True, intents=intents)
 
 async def handle_ping(request):
     return web.Response(text="Bot is online and running.")
@@ -30,8 +34,15 @@ async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
     print("Cloner ready. Use .clone [source_id] [target_id]")
 
+@bot.event
+async def on_message(message):
+    if message.author.id == bot.user.id and message.content.startswith(".clone"):
+        print(f"Detected clone command execution: {message.content}")
+    await bot.process_commands(message)
+
 @bot.command(name="clone")
 async def clone_server(ctx, source_guild_id: int, target_guild_id: int):
+    print(f"Command callback triggered for source: {source_guild_id}, target: {target_guild_id}")
     source_guild = bot.get_guild(source_guild_id)
     target_guild = bot.get_guild(target_guild_id)
 
