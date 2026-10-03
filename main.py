@@ -1,6 +1,6 @@
 # Language: Python 3.10+
 # Runtime: Render Free Tier Web Service
-# Target: Self-Bot Full Server Cloner (With Intents & Debug Logging)
+# Target: Self-Bot Full Server Cloner (With Full Logging & Channel Fixes)
 
 import asyncio
 import os
@@ -73,7 +73,7 @@ async def clone_server(ctx, source_guild_id: int, target_guild_id: int):
             except Exception as e:
                 print(f"Failed to delete role {role.name}: {e}")
 
-    # 3. Recreate Roles from source (bottom-up by position, skipping @everyone and managed roles)
+    # 3. Recreate Roles from source
     role_mapping = {}
     sorted_roles = sorted(source_guild.roles, key=lambda r: r.position)
     
@@ -93,6 +93,8 @@ async def clone_server(ctx, source_guild_id: int, target_guild_id: int):
         except Exception as e:
             print(f"Failed to create role {role.name}: {e}")
 
+    print("Roles created successfully. Starting category and channel replication...")
+
     # 4. Recreate Categories and Channels
     categories = sorted([c for c in source_guild.categories], key=lambda c: c.position)
     
@@ -109,10 +111,11 @@ async def clone_server(ctx, source_guild_id: int, target_guild_id: int):
                 name=category.name,
                 overwrites=overwrites
             )
+            print(f"Created category: {category.name}")
             await asyncio.sleep(1.2)
 
-            for channel in category.channels:
-                if isinstance(channel, discord.TextChannel):
+            for channel in category.text_channels:
+                try:
                     await target_guild.create_text_channel(
                         name=channel.name,
                         category=new_cat,
@@ -120,20 +123,30 @@ async def clone_server(ctx, source_guild_id: int, target_guild_id: int):
                         slowmode_delay=channel.slowmode_delay,
                         nsfw=channel.nsfw
                     )
-                elif isinstance(channel, discord.VoiceChannel):
+                    print(f"Created text channel: {channel.name} under {category.name}")
+                    await asyncio.sleep(1.2)
+                except Exception as ce:
+                    print(f"FAILED text channel {channel.name}: {ce}")
+
+            for channel in category.voice_channels:
+                try:
                     await target_guild.create_voice_channel(
                         name=channel.name,
                         category=new_cat,
                         bitrate=channel.bitrate,
                         user_limit=channel.user_limit
                     )
-                await asyncio.sleep(1.2)
+                    print(f"Created voice channel: {channel.name} under {category.name}")
+                    await asyncio.sleep(1.2)
+                except Exception as ce:
+                    print(f"FAILED voice channel {channel.name}: {ce}")
+
         except Exception as e:
             print(f"Failed to clone category {category.name}: {e}")
 
     # 5. Recreate Uncategorized Channels
     for channel in source_guild.channels:
-        if channel.category is None:
+        if channel.category is None and not isinstance(channel, discord.CategoryChannel):
             try:
                 if isinstance(channel, discord.TextChannel):
                     await target_guild.create_text_channel(
@@ -142,12 +155,14 @@ async def clone_server(ctx, source_guild_id: int, target_guild_id: int):
                         slowmode_delay=channel.slowmode_delay,
                         nsfw=channel.nsfw
                     )
+                    print(f"Created uncategorized text channel: {channel.name}")
                 elif isinstance(channel, discord.VoiceChannel):
                     await target_guild.create_voice_channel(
                         name=channel.name,
                         bitrate=channel.bitrate,
                         user_limit=channel.user_limit
                     )
+                    print(f"Created uncategorized voice channel: {channel.name}")
                 await asyncio.sleep(1.2)
             except Exception as e:
                 print(f"Failed to clone uncategorized channel {channel.name}: {e}")
